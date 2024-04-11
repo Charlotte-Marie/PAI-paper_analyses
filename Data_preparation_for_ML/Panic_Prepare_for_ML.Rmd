@@ -1,0 +1,82 @@
+---
+title: "Panic_Prepare_for_ML"
+author: "Charlotte Meinke"
+date: "2024-03-18"
+output: html_document
+---
+
+# Rmarkdown Settings
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,rows.print = 6, cols.min.print = 3)
+
+library(rmarkdown)
+library(pander)
+library(foreign)
+library(dplyr)
+library(gtsummary)
+library(flextable)
+library(officer)
+library(caret)
+
+rm(list = ls())
+```
+
+```{r}
+source("Function_for_preparation_ML.R", local = knitr::knit_global())
+```
+
+# Important Functions
+```{r}
+# Recode binary variables to 0.5 and -0.5, except for group
+# convert_bin_vars <- function(dataframe) {
+#   is_binary <- sapply(dataframe, function(col) length(unique(col)) <= 2)
+#   for (col in names(dataframe)[is_binary]) {
+#     if (col != "group"){
+#       dataframe[[col]] <- ifelse(dataframe[[col]] == 0, -0.5, 0.5)
+#     }
+#   }
+#   return(dataframe)
+# }
+# 
+# # Recode group variable
+# recode_group <- function(df){
+#   df[["group"]]<- as.factor(df[["group"]])
+#   df[["group"]] <- dplyr::recode(df[["group"]],"Therapist-guided exposures" = "0", "Unguided exposures" = "1")
+#   return(df)
+# }
+# 
+# split_and_save <- function(df, output_path){
+#   exclude_columns <- c('group', 'pa_HAMA_total')
+#   features <- df[, setdiff(names(df), exclude_columns)]
+#   group <- df[,c("group")]
+#   # pa_hama_total
+#   outcome <- df[,c("pa_HAMA_total")]
+#   write.table(outcome, file  = file.path(output_path,"labels.txt"), sep = "\t",row.names = FALSE, col.names = TRUE)
+#   write.table(features, file  =  file.path(output_path,"features.txt"), sep = "\t",row.names = FALSE, col.names = TRUE)
+#   write.table(group, file  =  file.path(output_path,"groups.txt"), sep = "\t",row.names = FALSE, col.names = TRUE)
+# }
+```
+
+# Load data
+```{r}
+df_prep <- read.csv("Z:\\PsyThera\\Projekte_Meinke\\PAI_Personalized_Advantage_Index\\4_Analysis_CM\\Datenaufbereitung_Panik\\data_Panic_prepared.csv")
+```
+
+# Recode group variable to 0 and 1 
+```{r}
+df_prep_rec_group <- recode_group(df_prep,group_variable = "group", group_0 = "Therapist-guided exposures", group_1 = "Unguided exposures")
+```
+
+# Recode binary variables to -0.5, 0.5 (except for group variable)
+```{r}
+df_prep_rec_all <- convert_bin_vars(df_prep_rec_group, group_variable = "group")
+```
+
+# Split dataset into feature, outcome, and group and save it 
+```{r}
+output_path_no_onehot = "Z:\\PsyThera\\Projekte_Meinke\\PAI_Personalized_Advantage_Index\\4_Analysis_CM\\Datenaufbereitung_Panik"
+# \\no_one_hot
+split_and_save(df_prep_rec_all, group_variable = "group", outcome_variable = "pa_HAMA_total", output_path_no_onehot)
+
+```

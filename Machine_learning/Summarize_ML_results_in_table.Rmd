@@ -1,0 +1,363 @@
+---
+title: "Summarize results of traditional and advanced approaches in a table"
+author: "Charlotte Meinke"
+date: "9/8/2023"
+output: html_document
+---
+
+# Load packages
+```{r}
+library(pander)
+library(dplyr)
+library(purrr)
+library(tibble)
+```
+
+# Advanced approach: Import data
+## Set paths for advanced approaches
+```{r}
+# Set paths for folders of advanced approaches
+path_base = "Z:\\PsyThera\\Projekte_Meinke\\PAI_Personalized_Advantage_Index\\Results_PAI_Test"
+paths_advanced <- list(
+  "panic.adv\n(ridge)" = file.path(path_base, "PANIK_net\\final_ridge_regression_no_one_hot"),
+  "panic.adv\n(ridgewhp)" = file.path(path_base,"PANIK_net\\final_ridge_regression_no_one_hot_hp_tuned_grid"),
+  "panic.adv\n(rf)" = file.path(path_base, "PANIK_net\\final_random_forest_no_one_hot"),
+  "protect.adv\n(ridge)" = file.path(path_base,"PROTECT_AD\\final_ridge_regression_no_one_hot"),
+  "protect.adv\n(ridgewhp)" = file.path(path_base,"PROTECT_AD\\final_ridge_regression_no_one_hot_hp_tuned_grid"),
+  "protect.adv\n(rf)" = file.path(path_base, "PROTECT_AD\\final_random_forest_no_one_hot"),
+  "aprotectsympscore.adv\n(ridge)" = file.path(path_base,"PROTECT_AD_symptom\\final_ridge_regression_no_one_hot"),
+  "aprotectfuncscore.adv\n(ridge)" =  file.path(path_base,"PROTECT_AD_function\\final_ridge_regression_no_one_hot")
+)
+```
+
+## Define function
+
+```{r}
+# import_model_summary_advanced <- function(file_path, model, name_modelperformance_file, name_PAI_file){
+#   
+#   # Load model performance metrics
+#   path_model_eval = file.path(file_path,name_modelperformance_file)
+#   df_model_eval = read.delim(path_model_eval)
+#   colnames(df_model_eval) = c("Metric",model)
+#   
+#   # Load PAI evaluation metrics
+#   path_PAI_eval = file.path(file_path,name_PAI_file)
+#   df_PAI_eval = read.delim(path_PAI_eval, header = TRUE)
+#   
+#   # Transpose PAI evaluation metrics
+#   df_PAI_eval$X <- NULL
+#   df_PAI_eval_t <- as.data.frame(t(df_PAI_eval))
+#   df_PAI_eval_t$Metric <- rownames(df_PAI_eval_t)
+#   colnames(df_PAI_eval_t) <- c(model,"Metric")
+#   # Merge by metric
+#   df = rbind(df_model_eval,df_PAI_eval_t)
+#   return(df)
+# }
+
+import_model_summary_advanced <- function(file_path, model, name_modelperformance_file, name_PAI_file){
+  
+  # Initialize an empty dataframe
+  df <- data.frame(Metric = character(), stringsAsFactors = FALSE)
+  
+  # Check if name_modelperformance_file is provided
+  if (!missing(name_modelperformance_file)) {
+    # Load modal evaluation metrics
+    path_model_eval = file.path(file_path, name_modelperformance_file)
+    df_model_eval = read.delim(path_model_eval)
+    colnames(df_model_eval) = c("Metric", model)
+    
+    # Append model evaluation metrics to the dataframe
+    df <- rbind(df, df_model_eval)
+  }
+  
+  # Load PAI evaluation metrics
+  path_PAI_eval = file.path(file_path, name_PAI_file)
+  df_PAI_eval = read.delim(path_PAI_eval, header = TRUE)
+  
+  # Transpose PAI evaluation metrics
+  df_PAI_eval$X <- NULL
+  df_PAI_eval_t <- as.data.frame(t(df_PAI_eval))
+  df_PAI_eval_t$Metric <- rownames(df_PAI_eval_t)
+  colnames(df_PAI_eval_t) <- c(model, "Metric")
+  
+  # Append PAI evaluation metrics to the dataframe
+  df <- rbind(df, df_PAI_eval_t)
+  
+  return(df)
+}
+```
+
+## Import and save as dataframe
+```{r}
+
+results_files_advanced_all <- list()
+for(model in names(paths_advanced)){
+  results_files_advanced_all[[model]] = import_model_summary_advanced(paths_advanced[[model]], 
+                                                              model,
+                                                              name_modelperformance_file = "modelperformance_summary.txt",
+                                                              name_PAI_file = "PAI_summary_all.txt")
+}
+
+results_files_advanced_50perc <- list()
+for(model in names(paths_advanced)){
+  results_files_advanced_50perc [[model]] = import_model_summary_advanced(paths_advanced[[model]], 
+                                                              model,
+                                                              name_PAI_file = "PAI_summary_50_perc.txt")
+}
+
+```
+
+# Prepare summary for advanced approach
+
+```{r}
+process_results_advanced <- function(results_files_advanced, mean_metrics, sd_metrics) {
+  # Reduce results_files_advanced by inner join on "Metric"
+  result <- results_files_advanced %>% 
+    reduce(inner_join, by = "Metric") %>%
+    select(Metric, everything())
+  
+  # Filter the results based on mean_metrics and sd_metrics
+  results_adv_df <- result[result$Metric %in% c(mean_metrics, sd_metrics), ]
+  
+  # Transpose dataframe
+  results_t <- as.data.frame(t(results_adv_df))
+  new_header <- as.character(results_t[1, ])  # Extract second row as character vector
+  results_t <- results_t[-c(1), ]  # Remove the first and second rows
+  colnames(results_t) <- new_header
+  results_t[] <- lapply(results_t, as.numeric)
+  
+  # Add standard deviations in brackets to mean columns
+  for (i in seq_along(mean_metrics)) {
+    mean <- mean_metrics[i]
+    sd <- sd_metrics[i]
+    results_t[[mean]] <- paste(round(results_t[[mean]], 2), " (", round(results_t[[sd]], 2), ")", sep = "")
+    results_t[[sd]] <- NULL
+  }
+  # Retranspose
+  results_adv_df <- as.data.frame(t(results_t))
+  
+  # Add Metrics column with row names
+  results_adv_df <- rownames_to_column(results_adv_df, var = "Metric")
+  
+  return(results_adv_df)
+}
+
+mean_metrics <- c("Mean_all_correlation","Mean_all_RMSE","Mean_all_MAE","mean.abspai","mean.Cohens.d")
+sd_metrics <- c("Std_all_correlation","Std_all_RMSE","Std_all_MAE","mean.abspai.SD", "mean.Cohens.d.SD")
+results_adv_df <- process_results_advanced(results_files_advanced = results_files_advanced_all, 
+                                           mean_metrics = mean_metrics,
+                                           sd_metrics = sd_metrics)
+
+mean_metrics_50perc <- c("mean.abspai","mean.Cohens.d")
+sd_metrics_50perc <- c("mean.abspai.SD", "mean.Cohens.d.SD")
+results_adv_df_50perc <- process_results_advanced(results_files_advanced = results_files_advanced_50perc, 
+                                                  mean_metrics = mean_metrics_50perc,
+                                                  sd_metrics = sd_metrics_50perc)
+results_adv_df_50perc$Metric <- paste(results_adv_df_50perc$Metric,"50perc",sep = ".")
+
+results_adv_df_50perc
+```
+
+# Traditional approach: Import and save as dataframe
+### Set paths
+```{r}
+path_trad<- list(
+  "panic.trad\n(linear)"= file.path(path_base,"PANIK_net\\final_traditional_approach_no_one_hot"),
+  "protect.trad\n(linear)"= file.path(path_base,"PROTECT_AD\\final_traditional_approach_no_one_hot")
+)
+```
+
+### Define function
+```{r}
+
+# import_model_summary_traditional <- function(file_path, model, name_modelperformance_file, name_PAI_file){
+#   
+#   # Load model evaluation metrics
+#   path_model_eval = file.path(file_path,name_modelperformance_file)
+#   df_model_eval = read.delim(path_model_eval)
+#   #colnames(df_model_eval) = c("Metric",model)
+#   
+#   # Load PAI evaluation metrics
+#   path_PAI_eval = file.path(file_path,name_PAI_file)
+#   df_PAI_eval = read.delim(path_PAI_eval, header = TRUE)
+#   
+#   # Concat both dfs
+#   df = cbind(df_model_eval, df_PAI_eval)
+#   
+#   # Transpose df
+#   df_t <- as.data.frame(t(df))
+#   df_t$Metric <- rownames(df_t)
+#   colnames(df_t) <- c(model,"Metric")
+#   
+#   return(df_t)
+# }
+
+import_model_summary_traditional <- function(file_path, model, name_modelperformance_file, name_PAI_file){
+  
+  # Check if name_modelperformance_file is provided
+  if (!missing(name_modelperformance_file)) {
+    # Load model evaluation metrics
+    path_model_eval = file.path(file_path, name_modelperformance_file)
+    df_model_eval = read.delim(path_model_eval)
+  }
+  
+  # Load PAI evaluation metrics
+  path_PAI_eval = file.path(file_path, name_PAI_file)
+  df_PAI_eval = read.delim(path_PAI_eval, header = TRUE)
+  
+  if (!missing(name_modelperformance_file)) {
+    df <- cbind(df_model_eval, df_PAI_eval)
+  }else
+    df <-  df_PAI_eval
+  
+  # Transpose df
+  df_t <- as.data.frame(t(df))
+  df_t$Metric <- rownames(df_t)
+  colnames(df_t) <- c(model, "Metric")
+  
+  return(df_t)
+}
+```
+
+### Import
+```{r}
+results_trad <- list()
+for(model in names(path_trad)){
+  results_trad[[model]] = import_model_summary_traditional(file_path = path_trad[[model]], 
+                                                           model = model,
+                                                           name_modelperformance_file = "model_eval_summary.txt",
+                                                           name_PAI_file = "PAI_eval_summary.txt")
+}
+
+results_trad_50perc <- list()
+for(model in names(path_trad)){
+  results_trad_50perc[[model]] = import_model_summary_traditional(path_trad[[model]], 
+                                                           model,
+                                                           name_PAI_file = "PAI_eval_50_perc.txt")
+}
+
+results_trad_df <- results_trad %>%
+  reduce(inner_join, by = "Metric")
+
+results_trad_df_50perc <- results_trad_50perc %>%
+  reduce(inner_join, by = "Metric")
+results_trad_df_50perc$Metric <- paste(results_trad_df_50perc$Metric,"50perc",sep = ".")
+
+results_trad_all <- rbind(results_trad_df,results_trad_df_50perc)
+```
+
+# Combine traditional and advanced dataframes
+## Recode variable names
+```{r}
+# Names of metrics in the traditional and advanced approach are originally different as the advanced approach calculates the mean across folds/repetitions
+# Therefore, metrics need to be renamed in order to merge both dataframes
+#results_adv_df$Metric <- as.factor(results_adv_df$Metric)
+
+results_adv_df$Metric <- recode(results_adv_df$Metric, "Mean_all_correlation" = "correlation", "Mean_all_RMSE" = "RMSE", 
+                    "Mean_all_MAE" = "MAE", "mean.Cohens.d" = "cohens.d")
+results_adv_df_50perc$Metric <- recode(results_adv_df_50perc$Metric, "mean.Cohens.d.50perc" = "cohens.d.50perc")
+results_adv_all <- rbind(results_adv_df, results_adv_df_50perc)
+```
+
+## Join dataframes
+```{r}
+df <- merge(results_trad_all, results_adv_all, by = "Metric")
+```
+
+# Make dataframe nicer
+## Order columns and round 
+```{r}
+names_advanced <- names(paths_advanced)
+names_panic <- names_advanced[grep("^panic", names_advanced)]
+names_protect <- names_advanced[grep("^protect.", names_advanced)]
+names_protect_alternatives <- names_advanced[grep("score",names_advanced)]
+
+cols_nice_order <- c("Metric",names(path_trad)[1],names_panic,names(path_trad)[2],names_protect,names_protect_alternatives)
+df <- df[, c(cols_nice_order)]
+
+df$`panic.trad\n(linear)` <- round(df$`panic.trad\n(linear)`,2)
+df$`protect.trad\n(linear)` <- round(df$`protect.trad\n(linear)`,2)
+```
+
+## Rename Column and Row names (= Headings)
+```{r}
+library(stringr)
+df_renamed <- df
+
+# Rename datasets in column names
+old_substrings <- c("panic", "aprotect", "protect","funcscore","sympscore","whp")
+new_substrings <- c("PANIK-net", "Protect-AD", "Protect-AD"," function"," symptom"," w hp")
+cols_nice_order_renamed <- str_replace_all(cols_nice_order, setNames(new_substrings, old_substrings))
+colnames(df_renamed) <- cols_nice_order_renamed
+
+# Get names of columns
+names_panic_new <- cols_nice_order_renamed[grep("^PANIK", cols_nice_order_renamed)]
+names_protect_new <- cols_nice_order_renamed[grep("^Protect.", cols_nice_order_renamed)]
+names_protect_alternatives_new <- cols_nice_order_renamed[grep("function|symptom",cols_nice_order_renamed)]
+
+# Rename and order metrics
+df_renamed$Metric <- factor(df_renamed$Metric, levels = c("cohens.d", "cohens.d.50perc","mean.abspai", "mean.abspai.50perc","MAE","RMSE","correlation"))
+levels(df_renamed$Metric) <- c("Cohen´s d","Cohen´s d 50%", "Mean PAI","Mean PAI 50%","MAE","RMSE","Correlation")
+df_renamed <- df_renamed[order(df_renamed$Metric), ]
+```
+
+# Generate apa-table
+```{r}
+# Rows: correlation, MAE, RMSE, Mean PAI, Cohen´s optimal vs. nonoptimal
+library(flextable)
+
+# Set defaults
+set_flextable_defaults(
+padding.bottom = 3,
+padding.top = 3,
+padding.left = 0.5,
+paddings.right = 0.5,
+theme_fun = "theme_apa",
+font.family = "Arial",
+font.size = 11
+)
+
+ft <- flextable(df_renamed)
+
+# Add space between Panik and PROTECT
+ft <- flextable(df_renamed, col_keys = c("Metric",names_panic_new,"blank",names_protect_new))
+
+
+# ft <- add_header_row(ft, values = c("","traditional approach","revised\napproach","traditional approach", "revised approach"),
+#                      colwidth = c(1,1,2,1,1), top = TRUE)
+# ft <- add_header_row(ft, values = c("","Panic Net dataset","PROTECT-AD dataset"),
+#                      colwidths = c(1,2,3))
+
+
+# Split headings
+ft <- separate_header(x = ft, opts = c("span-top"), split = "[.]")
+
+
+# Make sure that the first column is left-aligned (APA style!) and make the space empty
+ft <- ft %>% align(j = 1,align = "left") %>% empty_blanks()
+
+ft
+
+# Save as ft 
+library(officer)
+
+margins <- page_mar(
+  bottom = 0.5,
+  top = 0.5,
+  right = 0.5,
+  left = 0.5,
+  header = 0.5,
+  footer = 0.5,
+  gutter = 0.5
+)
+
+format_table <- prop_section(
+  page_size = page_size(orient = "wide"),
+  page_margins = margins)
+
+save_as_docx(
+  ft,
+  path = "Table_2_ML_performance.docx", pr_section = format_table)
+
+#C:\\Users\\charl\\Documents\\Promotion\\PAI-Paper\\plots\\
+```

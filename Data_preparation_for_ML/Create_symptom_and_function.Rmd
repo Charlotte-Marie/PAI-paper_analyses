@@ -1,0 +1,204 @@
+---
+title: "Symptom_and_functiong_dataprep"
+author: "Charlotte Meinke"
+date: "2024-03-15"
+output: html_document
+---
+
+# Rmarkdown Settings
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,rows.print = 6, cols.min.print = 3)
+
+library(rmarkdown)
+library(pander)
+library(foreign)
+library(dplyr)
+library(gtsummary)
+library(flextable)
+library(officer)
+library(caret)
+
+rm(list = ls())
+```
+
+```{r}
+source("Function_for_preparation_ML.R", local = knitr::knit_global())
+```
+
+# Import original data
+```{r import_data}
+d_all <- foreign::read.spss("Z:\\PsyThera\\Projekte_Meinke\\PAI_Personalized_Advantage_Index/Kevin_PAI_Daten_Analysen/Protect_AD/Aufbereitung/modernisierter_Ansatz/ProtectAD_Daten_P1_breit_201201.sav", to.data.frame = TRUE)
+```
+The original data has `r nrow(d_all)` patients.
+
+# Reduce dataset to symptom and functioning scores
+
+The symptom index is based on: HAMA, tcigesamt (CGI), DSM_cross_sum (anxiety), and a questionnaire for the primary diagnosis (either LSAS, PAS (Panic and agoraphobia scale), or DSM_sp (Primärdiagnose))
+The functioning index is based on: WHODAS, GAF (here called zusatzfragebogen), EQ-5D
+```{r}
+symptom_vars_post <- c("HAMA_13","tcgigesamt_13","DSMcross_sum_13","LSAS_13","PAS_13","DSMsp_sum_13")
+symptom_vars_baseline <- c("HAMA_0","tcgigesamt_0","DSMcross_sum_0","LSAS_0","PAS_0","DSMsp_sum_0")
+functioning_vars_post <- c("WHODAS_13","EQ5d_13","zusatzfrageb_13")
+functioning_vars_baseline <- c("WHODAS_0","EQ5d_0","zusatzfrageb_0")
+
+index_vars <- c(symptom_vars_post,symptom_vars_baseline,functioning_vars_post, functioning_vars_baseline)
+
+# Create dataset with functioning and symptom score only
+df_symp_func <- d_all[,c("patientennummer","HauptDx1",index_vars)]
+```
+
+# Prepare questionnaire
+## Functioning index: Recode GAF and EQ5d
+
+For all questionnaires, a higher score should express stronger symptoms or higher functional impairment.
+
+```{r}
+df_symp_func$EQ5d_13 <- (1-df_symp_func$EQ5d_13)
+df_symp_func$EQ5d_0 <- (1-df_symp_func$EQ5d_0)
+df_symp_func$zusatzfrageb_0 <- (100-df_symp_func$zusatzfrageb_0)
+df_symp_func$zusatzfrageb_13 <- (100-df_symp_func$zusatzfrageb_13)
+```
+
+## Standardize questionnaire values according to their minimal/maximal value
+
+Ranges of the scores can be directly taken from the Codebook
+
+```{r}
+# Create "dictionary" with range for each variable
+minmax_values <- list(
+  HAMA = list(min = 0, max = 56),
+  tcgigesamt = list(min = 0, max = 7), # actually the tcgi has a range from 1 to 7, but some subjects were rated as 0
+  DSMcross_sum = list(min = 0, max = 40),
+  LSAS = list(min = 0, max = 144),
+  PAS = list(min = 1, max = 13),
+  DSMsp_sum = list(min = 0, max = 40),
+  WHODAS = list(min = 0, max = 48),
+  EQ5d = list(min = 0, max = 1),
+  zusatzfrageb = list(min = 0, max = 100) # GAF: here due to recoding: 100 = worst functioning
+)
+
+normalize <- function(x, min, max, na.rm = TRUE) {
+    return((x- min) /(max-min))
+}
+
+for (var in index_vars){
+  prefix = sub("_[^_]+$", "", var)
+  df_symp_func[var] <- normalize(x = df_symp_func[[var]], 
+            min = minmax_values[[prefix]][["min"]], 
+            max = minmax_values[[prefix]][["max"]]
+            )
+}
+
+df_symp_func
+```
+
+## Symptom index: Create variable "symptom severity" to save questionnaire for primary disorder
+
+```{r}
+df_symp_func$HauptDx1 <- gsub("\\s+", "", df_symp_func$HauptDx1)
+
+set_primary_severity <- function(df, suffix) {
+  df[, paste0("prim_severity_", suffix)] <- NA
+  for (i in 1:nrow(df)) {
+    dx <- df[i, "HauptDx1"]
+    if (dx %in% c("F40.01", "F41.0", "F40.00")) {
+      df[i, paste0("prim_severity_", suffix)] <- df[i, paste0("PAS_", suffix)]
+    } else if (dx == "F40.1") {
+      df[i, paste0("prim_severity_", suffix)] <- df[i, paste0("LSAS_", suffix)]
+    } else if (dx %in% c("F40.21", "F40.22", "F40.23", "F40.24", "F40.25")) {
+      df[i, paste0("prim_severity_", suffix)] <- df[i, paste0("DSMsp_sum_", suffix)]
+    }
+  }
+  return(df)
+}
+
+df_symp_func <- set_primary_severity(df_symp_func, "13")
+df_symp_func <- set_primary_severity(df_symp_func, "0")
+
+df_symp_func <- df_symp_func %>%
+  select(-starts_with("PAS_"), -starts_with("LSAS_"), -starts_with("DSMsp_sum_"))
+df_symp_func
+```
+
+# Remove patients with NAs in any questionnaire needed for the symptom or functioning index
+
+## Create datasets for functioning and symptom index
+The symptom index is based on: tcigesamt (CGI), DSM_cross_sum (anxiety), LSAS, PAS (Panic and agoraphobia scale), DSM_sp (Primärdiagnose)  
+The functioning index is based on: WHODAS, GAF(here called zusatzfragebogen), EQ-5D
+```{r }
+symptom_vars_post <- c("HAMA_13","tcgigesamt_13","DSMcross_sum_13","prim_severity_13")
+symptom_vars_baseline <- c("HAMA_0","tcgigesamt_0","DSMcross_sum_0","prim_severity_0")
+functioning_vars_post <- c("WHODAS_13","EQ5d_13","zusatzfrageb_13")
+functioning_vars_baseline <- c("WHODAS_0","EQ5d_0","zusatzfrageb_0")
+
+df_symp <- df_symp_func[,c("patientennummer",symptom_vars_post, symptom_vars_baseline)]
+df_func <- df_symp_func[,c("patientennummer",functioning_vars_post, functioning_vars_baseline)]
+```
+
+## Remove patients with NAs in baseline and post questionnaires
+Patients with missing **post values** need to be excluded as keeping them would create label noise.
+Patients with missing **baseline values** need to be excluded in this case as keeping them would require imputation in each iteration of cross-validation. Thus, we would need to calculate the symptom and functioning index in each iteration of a cross-validation.
+
+```{r}
+df_symp[!complete.cases(df_symp), ]
+df_symp <- df_symp_func[complete.cases(df_symp), ]
+df_func[!complete.cases(df_func), ]
+df_func <- df_func[complete.cases(df_func), ]
+```
+`r nrow(df_symp)` patients are included for the symptom index (removing `r nrow(df_symp[!complete.cases(df_symp), ])`patients)
+`r nrow(df_func)` patients are included for the functioning index (removing `r nrow(df_func[!complete.cases(df_func), ])`patients).
+
+
+# Sum up questionnaires to symptom/functioning index
+
+```{r}
+df_func$function_0 <- rowSums(df_func[, functioning_vars_baseline])
+df_func$function_13 <- rowSums(df_func[, functioning_vars_post])
+
+df_symp$symptom_0 <-  rowSums(df_symp[, symptom_vars_baseline])
+df_symp$symptom_13 <-  rowSums(df_symp[, symptom_vars_post])
+
+df_func
+df_symp
+```
+
+# Add function and symptom indices to ML prepared data
+Function and symptom indices are added to the rest of the Protect dataset which has been prepared for machine learning.
+
+## Import dataset that has been prepared for ML
+
+```{r}
+df_prep_ML <- read.csv("Z:\\PsyThera\\Projekte_Meinke\\PAI_Personalized_Advantage_Index\\4_Analysis_CM\\Datenaufbereitung_Protect\\data_Protect_prepared_ML.csv")
+```
+
+## Add functioning and symptom indices
+
+```{r}
+d_symp_all <- merge(df_prep_ML,df_symp[,c("patientennummer","symptom_0","symptom_13")], by = "patientennummer")
+d_func_all <- merge(df_prep_ML,df_func[,c("patientennummer","function_0","function_13")], by = "patientennummer")
+
+# Remove X
+d_symp_all$X <- NULL
+d_func_all$X <- NULL
+
+# Remove HAMA_13
+d_symp_all$HAMA_13 <- NULL
+d_func_all$HAMA_13 <- NULL
+
+# Remove patient ID
+d_symp_all$patientennummer <- NULL
+d_func_all$patientennummer <- NULL
+```
+
+## Split dataset into features, labels, and groups and save as files
+
+```{r }
+
+output_path_symptom = "Z:\\PsyThera\\Projekte_Meinke\\PAI_Personalized_Advantage_Index\\4_Analysis_CM\\Datenaufbereitung_Protect_symptom"
+# \\no_one_hot
+split_and_save(df = d_symp_all, group_variable = "studienbedingung", outcome_variable = "symptom_13", output_path = output_path_symptom)
+
+output_path_function = "Z:\\PsyThera\\Projekte_Meinke\\PAI_Personalized_Advantage_Index\\4_Analysis_CM\\Datenaufbereitung_Protect_function"
+# \\no_one_hot
+split_and_save(df = d_func_all, group_variable = "studienbedingung", outcome_variable = "function_13",output_path = output_path_function)
+```

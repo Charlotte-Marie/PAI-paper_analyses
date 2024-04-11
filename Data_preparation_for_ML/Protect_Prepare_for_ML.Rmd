@@ -1,0 +1,61 @@
+---
+title: "Prepare_data_for_ML"
+author: "Charlotte Meinke"
+date: "2024-03-15"
+output: html_document
+---
+
+# Settings
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,rows.print = 6, cols.min.print = 3)
+
+library(rmarkdown)
+library(pander)
+library(foreign)
+library(dplyr)
+library(gtsummary)
+library(flextable)
+library(officer)
+library(caret)
+
+rm(list = ls())
+```
+
+```{r}
+source("Function_for_preparation_ML.R", local = knitr::knit_global())
+```
+
+# Load data
+```{r}
+df_prep <- read.csv("Z:\\PsyThera\\Projekte_Meinke\\PAI_Personalized_Advantage_Index\\4_Analysis_CM\\Datenaufbereitung_Protect\\data_Protect_prepared.csv")
+```
+
+# Recode group variable to 0 and 1
+```{r}
+df_prep_rec_group <- recode_group(df_prep, group_variable = "studienbedingung", group_0 = "TAU", group_1 = "IPI")
+```
+
+# Recode binary variables to -0.5, 0.5 (except for group variable)
+```{r}
+df_prep_rec_all <- convert_bin_vars(df_prep_rec_group, group_variable = "studienbedingung")
+```
+
+# Save the entire dataset inlcuding patient ID to add functioning and symptom indices later 
+```{r}
+# Save before splitting for later use
+write.csv(df_prep_rec_all, "Z:\\PsyThera\\Projekte_Meinke\\PAI_Personalized_Advantage_Index\\4_Analysis_CM\\Datenaufbereitung_Protect\\data_Protect_prepared_ML.csv")
+```
+
+# Split and save for ML
+```{r}
+output_path = "Z:\\PsyThera\\Projekte_Meinke\\PAI_Personalized_Advantage_Index\\4_Analysis_CM\\Datenaufbereitung_Protect"
+
+# \\no_one_hot
+
+# Remove patient IDs before saving
+df_prep_rec_all$patientennummer <- NULL
+
+# Split and save
+split_and_save(df_prep_rec_all, group_variable = "studienbedingung", outcome_variable = "HAMA_13", output_path = output_path)
+```

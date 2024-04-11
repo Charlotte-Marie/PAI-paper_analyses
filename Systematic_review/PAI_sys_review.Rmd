@@ -1,0 +1,385 @@
+---
+title: "PAI_Mini_Review"
+author: "Charlotte Meinke"
+date: '2023-11-15'
+output: html_document
+---
+
+# General settings
+## Load packages
+```{r}
+library(readxl)
+library(tidyr)
+library(ggplot2)
+library(dplyr)
+library(flextable)
+library(officer)
+library(readxl)
+```
+
+## Settings ggplot
+```{r}
+size_text = 8 # for psychological medicine
+family = "Arial"
+theme_set(theme_classic() + theme(text = element_text(size = size_text, family = family),
+                             axis.title = element_text(size = size_text, family = family), 
+                             plot.title = element_text(size = size_text, family = family),
+                             axis.text = element_text(size = size_text, family = family),
+                             strip.text =  element_text(size = size_text, family = family),
+                             legend.text =  element_text(size = size_text, family = family)))
+```
+
+## Settings flextable
+```{r, echo = FALSE}
+# Flextable
+set_flextable_defaults(font.family = "Arial",
+font.size = 8,
+padding.bottom = 3,
+padding.top = 3,
+padding.left = 0.5,
+paddings.right = 0.5,
+#theme_fun = "theme_apa",
+theme_fun = NULL,
+text.align = "center",
+line_spacing = 1.5)
+
+# Word documents to save flextables
+margins <- page_mar(
+  bottom = 0.5,
+  top = 0.5,
+  right = 0.5,
+  left = 0.5,
+  header = 0.5,
+  footer = 0.5,
+  gutter = 0.5
+)
+
+format_table_wide <- prop_section(
+  page_size = page_size(orient = "landscape"),
+  page_margins = margins)
+```
+
+# Table 1: Study characteristics table
+
+## Import data
+
+```{r import excel, results = 'hide', warning = FALSE}
+data_study_char <-
+  readxl::read_excel(path = "Extraction_PAI_studies_final_CM.xlsx", sheet = "study_characteristics_table",
+                     na = "NA",col_types = "text")
+```
+
+## Preprocess data
+
+```{r summary table with study characteristics, warning = FALSE}
+# # Extract column names from first row
+# colnames(data_study_char) <- data_study_char[1,]
+# data_study_char <- data_study_char[-1,]
+
+# Delete empty rows
+data_study_char <- data_study_char[!(is.na(data_study_char$`First Author, Year`)),]
+
+# Delete "et al."
+data_study_char$`First Author, Year` <- gsub(" et al.", "",data_study_char$`First Author, Year`)
+
+# Exclude column "Most relevant predictors"
+data_study_char$`Most relevant predictors` <- NULL
+
+# Exclude column Comments
+data_study_char$`Comments` <- NULL
+
+data_study_char
+```
+
+## Create flextable with study characteristics
+
+```{r flextable settings, echo=FALSE, warning = FALSE}
+
+# Create flextable
+ft_sumtable <- flextable(data_study_char)
+
+# Change header labels
+ft_sumtable <- set_header_labels(ft_sumtable, 
+                                 "post-treatment severity measure" = "outcome measure",
+                                 "type of feature selection approach" = "Feature selection",
+                                 "type of outcome prediction approach" = "Prediction",
+                                 "CV scheme" = "CV",
+                                 "Cohen's d for optimal vs non-optimal" = "Cohen's d")
+
+ft_sumtable
+```
+
+## Prepare and save table in word
+
+```{r Add title, table description, footer, echo=FALSE, warning = FALSE}
+# Set table properties
+ft_sumtable <- set_table_properties(ft_sumtable, width = 1, layout = "autofit")
+
+# Header in bold
+ft_sumtable <- bold(ft_sumtable, bold = TRUE, part = "header")
+
+# Export flextable
+save_as_docx(
+  ft_sumtable,
+  path = "C:\\Users\\charl\\Documents\\Promotion\\PAI-Paper\\Plots\\Table_1_study_characteristics.docx", pr_section = format_table_wide)
+```
+
+# Fig 2a: Visualize Cohen´s d for the whole sample and 50% with the highest PAI
+
+## Import data
+We use a slightly different table than the one used for the study characterics table as we want to have each subanalysis in one row.
+
+```{r}
+data_study_char <-
+  readxl::read_excel(path = "Extraction_PAI_studies_final_CM.xlsx", sheet = "subanalyses_cohens_d", na = "NA")
+
+start_index <- which(names(data_study_char) == "Mean absolute PAI")
+
+# Convert columns to numeric, starting from the specified column
+data_study_char[, start_index:ncol(data_study_char)] <- lapply(data_study_char[, start_index:ncol(data_study_char)], as.numeric)
+```
+
+## Subset data
+```{r}
+subsetted_data <- data_study_char[, c("First Author, Year", "Cohen's d for optimal vs non-optimal", "Subsample: Cohen's d for optimal vs non-optimal")]
+colnames(subsetted_data) <- c("Authors", "Entire sample", "Subsample")
+subsetted_data <- subsetted_data[order(is.na(subsetted_data$`Subsample`)), ]
+```
+
+## Prepare data for plotting
+```{r}
+# Convert data to long format and omit missing values (NAs)
+long_data <- subsetted_data %>%
+  tidyr::gather(key = "Sample_Type", value = "Cohen_D", -Authors) %>%
+  na.omit()
+
+# Convert Cohen_D to numeric
+long_data$Cohen_D <- as.numeric(long_data$Cohen_D)
+
+mean_Cohen_all = mean(subsetted_data$`Entire sample`,na.rm=TRUE)
+
+mean_Cohen_sub = mean(subsetted_data$`Subsample`,na.rm=TRUE)
+
+long_data$Authors <- gsub(" subanalysis", "",long_data$Authors)
+long_data$Authors <- gsub(" et al.", "",long_data$Authors)
+
+# Turn Author to factor again in reverse order
+long_data$Authors <- factor(long_data$Authors, levels = rev(unique(long_data$Authors)))
+```
+
+## Plot data
+```{r}
+# Dot plot
+#colour_palette = c("#0CEBE1", "#3C8581")
+colour_palette = c("#666666","#CCCCCC")
+lev = levels(long_data$Authors)
+
+#cohen_1 = as.vector(long_data[long_data$Authors == lev[18],c("Cohen_D")])$Cohen_D[1]
+#cohen_2 = as.vector(long_data[long_data$Authors == lev[18],c("Cohen_D")])$Cohen_D[2]
+
+plot_2a <- ggplot(long_data, aes(x = Authors, y = Cohen_D, color = Sample_Type)) +
+  geom_point(position = position_dodge(width = 0), size = 3) +
+  geom_hline(yintercept = mean_Cohen_all, color = colour_palette[1]) + 
+  geom_segment(aes(x = Inf, xend = "Webb, 2019", y = mean_Cohen_sub, yend = mean_Cohen_sub), color = colour_palette[2]) +
+  # geom_segment(aes(x = lev[18], xend = lev[18], 
+  #                  y = as.vector(long_data[long_data$Authors == lev[18],c("Cohen_D")])$Cohen_D[1], 
+  #                  yend = as.vector(long_data[long_data$Authors == lev[18],c("Cohen_D")])$Cohen_D[2]), 
+  #              color = "grey") +
+  labs(
+    x = "",
+    y = "Cohen's d",
+    color = "Sample Type"
+  ) +
+  scale_y_continuous(
+    breaks = c(0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8),
+    limits = c(0, 0.8)
+  ) + 
+  scale_color_manual(values = colour_palette)+ 
+  theme_bw() + 
+  theme(text = element_text(size = size_text, family = family),
+                             axis.title = element_text(size = size_text, family = family), 
+                             plot.title = element_text(size = size_text, family = family),
+                             axis.text = element_text(size = size_text, family = family),
+                             strip.text =  element_text(size = size_text, family = family),
+                             legend.text =  element_text(size = size_text, family = family)) +
+  theme(
+    panel.grid = element_blank(),          # Remove all grid lines
+    panel.grid.major.y = element_line(size = 0.2, color = "gray")    # Add only horizontal lines
+  )+
+  coord_flip() +
+  theme(legend.position = "bottom", legend.title = element_blank())
+  #theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# # Violin Plot 
+# ggplot(long_data, aes(x = Sample_Type, y = Cohen_D, fill = Sample_Type)) +
+#   geom_violin() +
+#   labs(
+#     title = "Distribution of Cohen's D by Sample Type",
+#     x = "Sample Type",
+#     y = "Cohen's D",
+#     fill = "Sample Type"
+#   ) +
+#   theme_minimal()
+
+plot_2a
+
+```
+
+# PROBAST-Rating
+## Import data
+```{r}
+data_PROBAST <- readxl::read_excel(path = "PAI_PROBAST_assessment.xlsx", sheet = "Main")
+colnames(data_PROBAST) <- data_PROBAST[1,]
+data_PROBAST <- data_PROBAST[2:nrow(data_PROBAST),]
+```
+
+## Table S1
+```{r}
+# Prepare dataset
+# Remove columns that contain "comments"
+cols_no_comments <- colnames(data_PROBAST)[!grepl("comments",colnames(data_PROBAST))]
+data_PROBAST_table <- data_PROBAST[,cols_no_comments]
+# Remove "et al."
+data_PROBAST_table$Study <- gsub(" et al.", "",data_PROBAST_table$Study)
+
+# Transpose table
+PROBAST_transposed <- t(data_PROBAST_table)
+PROBAST_transposed <- as.data.frame(PROBAST_transposed)
+colnames(PROBAST_transposed) <- PROBAST_transposed[1, ]
+PROBAST_transposed <- PROBAST_transposed[-1, ]
+# Use rownames as first column (as flextable ignores rownames)
+PROBAST_transposed <- PROBAST_transposed %>%
+  tibble::rownames_to_column(var = "Question")
+
+# Combine results for subanalyses
+colnames(PROBAST_transposed)[colnames(PROBAST_transposed)=="Hoeboer, 2021; subanalysis CAPS-5"] <- "Hoeboer, 2021; CAPS-5, PCL-5"
+PROBAST_transposed$`Hoeboer, 2021; subanalysis PCL-5` <- NULL
+colnames(PROBAST_transposed)[colnames(PROBAST_transposed)=="van Bronswijk, 2021; subanalysis FreqMesh"] <- "van Bronswijk, 2021; FreqMesh, STEPd"
+PROBAST_transposed$`van Bronswijk, 2021; subanalysis STEPd` <- NULL
+colnames(PROBAST_transposed)[colnames(PROBAST_transposed)=="van Bronswijk, 2021; subanalysis STEPd to FreqMesh"] <- "van Bronswijk, 2021; cross-trial"
+PROBAST_transposed$`van Bronswijk, 2021; subanalysis FreqMesh to STEPd` <- NULL
+
+# Generate flextable
+ft <- flextable(PROBAST_transposed)
+
+ft <- set_table_properties(ft, width = 1, layout = "autofit")
+ft <- autofit(ft)
+ft <- hline(ft, part = "body", i = c(3, 7, 14, 26), 
+                      border = fp_border(color = "black", width = 1))
+ft <- fontsize(ft, size = 7, part = "all")
+
+#flextable::save_as_docx(ft, path = "plots\\PROBAST_table.docx", pr_section = format_table_wide)
+```
+
+## Plot S1
+```{r Plot_PROBAST}
+# Final rating columns
+cols_final_rating <- c("Final rating domain 1 (risk of bias)", 
+                       "Final rating domain 2 (risk of bias)", 
+                       "Final rating domain 3 (risk of bias)", 
+                       "Final rating domain 4 (risk of bias)", 
+                       "Final rating (risk of bias)")
+
+data_PROBAST_plot <- data_PROBAST[c("Study",cols_final_rating)]
+
+# Bring data into long-format
+data_PROBAST_plot_long <- reshape(data = data_PROBAST_plot,idvar = "Study", new.row.names = 1:20000,varying = cols_final_rating, v.name = "ROB", times = cols_final_rating, direction = "long")
+colnames(data_PROBAST_plot_long)[colnames(data_PROBAST_plot_long)=="time"] <- 'Rating_domain'
+
+# Order and rename factor rating_domain
+PROBAST_domains_eng <- c("ROB Sample","ROB Predictors", "ROB Outcome", "ROB Analysis", "ROB Total")
+data_PROBAST_plot_long$Rating_domain <- factor(data_PROBAST_plot_long$Rating_domain, 
+                                               levels = cols_final_rating, 
+                                               labels = PROBAST_domains_eng)
+
+scaleFUN <- function(x) x*100
+
+# Prepare final rating domains labels to make one label bold
+breaks <- levels(data_PROBAST_plot_long$Rating_domain)
+labels <- as.expression(breaks)
+labels[[5]] <- bquote(bold(.(labels[[5]])))
+
+# Plot data
+legend_PROBAST_eng <- c("high", "low")
+plot_PROBAST <- ggplot(data = data_PROBAST_plot_long,aes(x = `Rating_domain`, fill = `ROB`))+ geom_bar(aes (alpha = Rating_domain == "ROB Gesamt", y = ..count../tapply(..count.., ..x.. ,sum)[..x..]))+
+  coord_flip()+
+  scale_fill_manual(values = c("red3","chartreuse3","grey"), name = "Risk of bias (ROB)", labels = legend_PROBAST_eng <- c("high", "low")) +
+  scale_y_continuous(labels=scaleFUN)+
+  scale_alpha_manual(values = c("TRUE" = 1, "FALSE" = 0.6), guide = "none")+
+  scale_x_discrete(label = labels, breaks = breaks)+
+   theme(legend.position = "top")+
+  xlab("")+
+  ylab("Relative Proportion in %")
+
+# Save plot
+plot_PROBAST
+ggsave("figure_S1_PROBAST.svg",plot_PROBAST, height = 4.5, width = 9)
+```
+
+## Figure 2b: Plot ROB vs. Cohen´s d
+
+### Prepare data
+```{r}
+# Bring data into long-format
+cols_imp <- c("4.8.1 What is the extent of ROB introduced by the cross-validation procedure?","4.8.2 What is the extent of ROB introduced by (not) integrating preprocessing steps into the CV?")
+data_PROBAST_48 <- data_PROBAST[c("Study",cols_imp)]
+
+# Add Cohen´s d from study characteristics data (merge by first column)
+data_study_char_imp <- data_study_char[,c("First Author, Year","Cohen's d for optimal vs non-optimal")]
+colnames(data_study_char_imp)[colnames(data_study_char_imp) == "First Author, Year"] <- "Study"
+data_Cohen_PROBAST <- merge(data_PROBAST_48, data_study_char_imp, by = "Study")
+
+# Change column names
+colnames(data_Cohen_PROBAST) <- c("Study","4.8.1_cv","4.8.2_steps","cohens_d")
+
+data_Cohen_PROBAST
+```
+
+### Prepare data for plotting
+```{r echo=TRUE}
+# Bring data into long-format
+data_Cohen_PROBAST_long <- reshape(data = data_Cohen_PROBAST,idvar = "Study", new.row.names = 1:20000,varying = c("4.8.1_cv","4.8.2_steps"), v.name = "ROB", times = c("4.8.1_cv","4.8.2_steps"), direction = "long")
+colnames(data_Cohen_PROBAST_long)[colnames(data_Cohen_PROBAST_long)=="time"] <- 'Question'
+
+data_Cohen_PROBAST_long$ROB <- gsub(" ROB","",data_Cohen_PROBAST_long$ROB)
+data_Cohen_PROBAST_long$ROB <- factor(data_Cohen_PROBAST_long$ROB, levels = c("low","medium", "high"))
+
+data_Cohen_PROBAST_long$Question <- dplyr::recode(data_Cohen_PROBAST_long$Question, "4.8.1_cv" = "Cross-validation", "4.8.2_steps" = "Data leakage")
+
+# Add mean column to depict mean in legend (workaround)
+data_Cohen_PROBAST_long$mean <- rep("mean",nrow(data_Cohen_PROBAST_long))
+```
+
+### Plot
+```{r}
+data_Cohen_PROBAST_long$cohens_d <- as.numeric(data_Cohen_PROBAST_long$cohens_d )
+plot_2b <- ggplot(data_Cohen_PROBAST_long, aes(x = ROB, y = cohens_d)) +
+  geom_jitter(size = 2, width = 0.1)+
+  stat_summary(fun = "mean", fun.min = "mean", fun.max= "mean", size= 0.3, geom = "crossbar")+
+  ylab("Cohen´s d")+
+  xlab("Risk of bias")+
+  #geom_segment(aes(xend = ROB, yend = cohens_d, color = "mean"), size = 3)+
+  geom_point(aes(shape = mean),size = 10, alpha = 0)+
+  scale_shape_manual(values = c("-"))+
+  guides(shape=guide_legend(override.aes = list(alpha = 1)))+
+  theme(legend.position = "bottom", legend.title = element_blank())+
+  facet_wrap(~Question)
+
+plot_2b + theme(
+  #strip.background = element_blank(),
+  strip.placement = "above" + theme_bw()
+)
+```
+
+# Combine Plot 2a and 2b
+```{r}
+library(patchwork)
+
+plot_2 <- plot_2a + plot_2b + plot_annotation(tag_levels = "A")
+
+# Savings for psychological medicine: dpi = 800
+# color: tif; grey + linework: eps
+ggsave("C:\\Users\\charl\\Documents\\Promotion\\PAI-Paper\\Plots\\Figure_2_Cohens_d.svg", plot_2, units = "cm", width = 20.5, height = 12, dpi = 800)
+ggsave("C:\\Users\\charl\\Documents\\Promotion\\PAI-Paper\\Plots\\Figure_2_Cohens_d.eps", plot_2, units = "cm", width = 20.5, height = 12, dpi = 800)
+
+```
