@@ -17,16 +17,16 @@ library(tibble)
 ## Set paths for advanced approaches
 ```{r}
 # Set paths for folders of advanced approaches
-path_base = "Z:\\PsyThera\\Projekte_Meinke\\PAI_Personalized_Advantage_Index\\Results_PAI_Test"
+path_base = "Y:\\PsyThera\\Projekte_Meinke\\PAI_Personalized_Advantage_Index\\Results_PAI_Test"
 paths_advanced <- list(
-  "panic.adv\n(ridge)" = file.path(path_base, "PANIK_net\\final_ridge_regression_no_one_hot"),
-  "panic.adv\n(ridgewhp)" = file.path(path_base,"PANIK_net\\final_ridge_regression_no_one_hot_hp_tuned_grid"),
-  "panic.adv\n(rf)" = file.path(path_base, "PANIK_net\\final_random_forest_no_one_hot"),
-  "protect.adv\n(ridge)" = file.path(path_base,"PROTECT_AD\\final_ridge_regression_no_one_hot"),
-  "protect.adv\n(ridgewhp)" = file.path(path_base,"PROTECT_AD\\final_ridge_regression_no_one_hot_hp_tuned_grid"),
-  "protect.adv\n(rf)" = file.path(path_base, "PROTECT_AD\\final_random_forest_no_one_hot"),
-  "aprotectsympscore.adv\n(ridge)" = file.path(path_base,"PROTECT_AD_symptom\\final_ridge_regression_no_one_hot"),
-  "aprotectfuncscore.adv\n(ridge)" =  file.path(path_base,"PROTECT_AD_function\\final_ridge_regression_no_one_hot")
+  "panic.adv\n(ridge)" = file.path(path_base, "PANIK_net_ridge_regression"),
+  "panic.adv\n(ridgewhp)" = file.path(path_base,"old\\PANIK_net\\final_ridge_regression_no_one_hot_hp_tuned_grid"),
+  "panic.adv\n(rf)" = file.path(path_base, "PANIK_net_random_forest"),
+  "protect.adv\n(ridge)" = file.path(path_base,"PROTECT_AD_ridge_regression"),
+  "protect.adv\n(ridgewhp)" = file.path(path_base,"old\\PROTECT_AD\\final_ridge_regression_no_one_hot_hp_tuned_grid"),
+  "protect.adv\n(rf)" = file.path(path_base, "PROTECT_AD_random_forest"),
+  "aprotectsympscore.adv\n(ridge)" = file.path(path_base,"PROTECT_AD_symptom_ridge_regression"),
+  "aprotectfuncscore.adv\n(ridge)" =  file.path(path_base,"PROTECT_AD_function_ridge_regression")
 )
 ```
 
@@ -162,8 +162,8 @@ results_adv_df_50perc
 ### Set paths
 ```{r}
 path_trad<- list(
-  "panic.trad\n(linear)"= file.path(path_base,"PANIK_net\\final_traditional_approach_no_one_hot"),
-  "protect.trad\n(linear)"= file.path(path_base,"PROTECT_AD\\final_traditional_approach_no_one_hot")
+  "panic.trad\n(linear)"= file.path(path_base,"old\\PANIK_net\\final_traditional_approach_no_one_hot"),
+  "protect.trad\n(linear)"= file.path(path_base,"old\\PROTECT_AD\\final_traditional_approach_no_one_hot_old")
 )
 ```
 
