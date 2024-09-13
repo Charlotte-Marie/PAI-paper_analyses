@@ -19,6 +19,9 @@ library(readxl)
 
 ## Settings ggplot
 ```{r}
+# Save all plots in the following path:
+path_save_plots = "Y:\\PsyThera\\Projekte_Meinke\\PAI_Personalized_Advantage_Index\\Schreiben\\Plots"
+
 size_text = 8 # for psychological medicine
 family = "Arial"
 theme_set(theme_classic() + theme(text = element_text(size = size_text, family = family),
@@ -65,7 +68,7 @@ format_table_wide <- prop_section(
 
 ```{r import excel, results = 'hide', warning = FALSE}
 data_study_char <-
-  readxl::read_excel(path = "Extraction_PAI_studies_final_CM.xlsx", sheet = "study_characteristics_table",
+  readxl::read_excel(path = "Extraction_PAI_studies_final_CM_KH_CM.xlsx", sheet = "study_characteristics_table",
                      na = "NA",col_types = "text")
 ```
 
@@ -121,7 +124,7 @@ ft_sumtable <- bold(ft_sumtable, bold = TRUE, part = "header")
 # Export flextable
 save_as_docx(
   ft_sumtable,
-  path = "C:\\Users\\charl\\Documents\\Promotion\\PAI-Paper\\Plots\\Table_1_study_characteristics.docx", pr_section = format_table_wide)
+  path = file.path(path_save_plots,"Table_1_study_characteristics.docx"), pr_section = format_table_wide)
 ```
 
 # Fig 2a: Visualize Cohen´s d for the whole sample and 50% with the highest PAI
@@ -131,7 +134,7 @@ We use a slightly different table than the one used for the study characterics t
 
 ```{r}
 data_study_char <-
-  readxl::read_excel(path = "Extraction_PAI_studies_final_CM.xlsx", sheet = "subanalyses_cohens_d", na = "NA")
+  readxl::read_excel(path = "Extraction_PAI_studies_final_CM_KH_CM.xlsx", sheet = "subanalyses_cohens_d", na = "NA")
 
 start_index <- which(names(data_study_char) == "Mean absolute PAI")
 
@@ -143,6 +146,8 @@ data_study_char[, start_index:ncol(data_study_char)] <- lapply(data_study_char[,
 ```{r}
 subsetted_data <- data_study_char[, c("First Author, Year", "Cohen's d for optimal vs non-optimal", "Subsample: Cohen's d for optimal vs non-optimal")]
 colnames(subsetted_data) <- c("Authors", "Entire sample", "Subsample")
+
+# Order after NA (CAVE: excel-file needs to be ordered alphabetically, to get the desired order)
 subsetted_data <- subsetted_data[order(is.na(subsetted_data$`Subsample`)), ]
 ```
 
@@ -155,15 +160,14 @@ long_data <- subsetted_data %>%
 
 # Convert Cohen_D to numeric
 long_data$Cohen_D <- as.numeric(long_data$Cohen_D)
-
 mean_Cohen_all = mean(subsetted_data$`Entire sample`,na.rm=TRUE)
-
 mean_Cohen_sub = mean(subsetted_data$`Subsample`,na.rm=TRUE)
 
+# Improve study names
 long_data$Authors <- gsub(" subanalysis", "",long_data$Authors)
 long_data$Authors <- gsub(" et al.", "",long_data$Authors)
 
-# Turn Author to factor again in reverse order
+# Here, the variable needs only to be reversed.
 long_data$Authors <- factor(long_data$Authors, levels = rev(unique(long_data$Authors)))
 ```
 
@@ -228,7 +232,7 @@ plot_2a
 # PROBAST-Rating
 ## Import data
 ```{r}
-data_PROBAST <- readxl::read_excel(path = "PAI_PROBAST_assessment.xlsx", sheet = "Main")
+data_PROBAST <- readxl::read_excel(path = "PAI_PROBAST_assessment_KH_CM.xlsx", sheet = "Main")
 colnames(data_PROBAST) <- data_PROBAST[1,]
 data_PROBAST <- data_PROBAST[2:nrow(data_PROBAST),]
 ```
@@ -301,7 +305,7 @@ labels[[5]] <- bquote(bold(.(labels[[5]])))
 
 # Plot data
 legend_PROBAST_eng <- c("high", "low")
-plot_PROBAST <- ggplot(data = data_PROBAST_plot_long,aes(x = `Rating_domain`, fill = `ROB`))+ geom_bar(aes (alpha = Rating_domain == "ROB Gesamt", y = ..count../tapply(..count.., ..x.. ,sum)[..x..]))+
+plot_PROBAST <- ggplot(data = data_PROBAST_plot_long,aes(x = `Rating_domain`, fill = `ROB`))+ geom_bar(aes (alpha = Rating_domain == "ROB Total", y = ..count../tapply(..count.., ..x.. ,sum)[..x..]))+
   coord_flip()+
   scale_fill_manual(values = c("red3","chartreuse3","grey"), name = "Risk of bias (ROB)", labels = legend_PROBAST_eng <- c("high", "low")) +
   scale_y_continuous(labels=scaleFUN)+
@@ -379,7 +383,6 @@ plot_2 <- plot_2a + plot_2b + plot_annotation(tag_levels = "A")
 
 # Savings for psychological medicine: dpi = 800
 # color: tif; grey + linework: eps
-ggsave("C:\\Users\\charl\\Documents\\Promotion\\PAI-Paper\\Plots\\Figure_2_Cohens_d.svg", plot_2, units = "cm", width = 20.5, height = 12, dpi = 800)
-ggsave("C:\\Users\\charl\\Documents\\Promotion\\PAI-Paper\\Plots\\Figure_2_Cohens_d.eps", plot_2, units = "cm", width = 20.5, height = 12, dpi = 800)
-
+ggsave(file.path(path_save_plots,"Figure_2_Cohens_d.svg"), plot_2, units = "cm", width = 20.5, height = 12, dpi = 800)
+ggsave(file.path(path_save_plots,"Figure_2_Cohens_d.eps"), plot_2, units = "cm", width = 20.5, height = 12, dpi = 800)
 ```

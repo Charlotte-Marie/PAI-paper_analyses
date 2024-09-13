@@ -30,8 +30,7 @@ paths_advanced <- list(
 )
 ```
 
-## Define function
-
+## Function: Import results of advanced approaches
 ```{r}
 # import_model_summary_advanced <- function(file_path, model, name_modelperformance_file, name_PAI_file){
 #   
@@ -107,10 +106,12 @@ for(model in names(paths_advanced)){
 
 ```
 
-# Prepare summary for advanced approach
-
+## Function: Summarize results of advanced approach
 ```{r}
-process_results_advanced <- function(results_files_advanced, mean_metrics, sd_metrics) {
+process_results_advanced <- function(results_files_advanced, mean_metrics, sd_metrics,add_SD_brackets = TRUE) {
+  # This function collects the important results of the advanced approaches in a dataframe
+  # mean_metrics = names of mean metrics of interest
+  # sd_metrics = names of corresponding sds
   # Reduce results_files_advanced by inner join on "Metric"
   result <- results_files_advanced %>% 
     reduce(inner_join, by = "Metric") %>%
@@ -127,21 +128,27 @@ process_results_advanced <- function(results_files_advanced, mean_metrics, sd_me
   results_t[] <- lapply(results_t, as.numeric)
   
   # Add standard deviations in brackets to mean columns
-  for (i in seq_along(mean_metrics)) {
-    mean <- mean_metrics[i]
-    sd <- sd_metrics[i]
-    results_t[[mean]] <- paste(round(results_t[[mean]], 2), " (", round(results_t[[sd]], 2), ")", sep = "")
-    results_t[[sd]] <- NULL
-  }
+  if (add_SD_brackets == TRUE){
+    for (i in seq_along(mean_metrics)) {
+      mean <- mean_metrics[i]
+      sd <- sd_metrics[i]
+      results_t[[mean]] <- paste(round(results_t[[mean]], 2), " (", round(results_t[[sd]], 2), ")", sep = "")
+      results_t[[sd]] <- NULL
+    }
+  } 
+  
   # Retranspose
   results_adv_df <- as.data.frame(t(results_t))
   
-  # Add Metrics column with row names
+  # Add metrics as first columns (row names in results_t)
   results_adv_df <- rownames_to_column(results_adv_df, var = "Metric")
   
   return(results_adv_df)
 }
+```
 
+## Summarize results
+```{r }
 mean_metrics <- c("Mean_all_correlation","Mean_all_RMSE","Mean_all_MAE","mean.abspai","mean.Cohens.d")
 sd_metrics <- c("Std_all_correlation","Std_all_RMSE","Std_all_MAE","mean.abspai.SD", "mean.Cohens.d.SD")
 results_adv_df <- process_results_advanced(results_files_advanced = results_files_advanced_all, 
@@ -159,15 +166,15 @@ results_adv_df_50perc
 ```
 
 # Traditional approach: Import and save as dataframe
-### Set paths
+## Set paths
 ```{r}
-path_trad<- list(
+path_trad <- list(
   "panic.trad\n(linear)"= file.path(path_base,"PANIK_traditional_approach"),
   "protect.trad\n(linear)"= file.path(path_base,"Protect_traditional_approach")
 )
 ```
 
-### Define function
+## Function: Import results of traditional approach
 ```{r}
 
 # import_model_summary_traditional <- function(file_path, model, name_modelperformance_file, name_PAI_file){
@@ -219,7 +226,7 @@ import_model_summary_traditional <- function(file_path, model, name_modelperform
 }
 ```
 
-### Import
+## Import
 ```{r}
 results_trad <- list()
 for(model in names(path_trad)){
@@ -235,7 +242,10 @@ for(model in names(path_trad)){
                                                            model,
                                                            name_PAI_file = "PAI_eval_50_perc.txt")
 }
+```
 
+## Summarize results
+```{r}
 results_trad_df <- results_trad %>%
   reduce(inner_join, by = "Metric")
 
@@ -247,7 +257,7 @@ results_trad_all <- rbind(results_trad_df,results_trad_df_50perc)
 ```
 
 # Combine traditional and advanced dataframes
-## Recode variable names
+## Recode variable names of advanced results
 ```{r}
 # Names of metrics in the traditional and advanced approach are originally different as the advanced approach calculates the mean across folds/repetitions
 # Therefore, metrics need to be renamed in order to merge both dataframes
@@ -360,4 +370,154 @@ save_as_docx(
   path = "Table_2_ML_performance.docx", pr_section = format_table)
 
 #C:\\Users\\charl\\Documents\\Promotion\\PAI-Paper\\plots\\
+```
+
+# Create nice plot for poster
+## Summarize results of advanced approach for poster
+```{r}
+mean_metrics <- c("Mean_all_correlation","Mean_all_RMSE","Mean_all_MAE","mean.abspai","mean.Cohens.d")
+sd_metrics <- c("Std_all_correlation","Std_all_RMSE","Std_all_MAE","mean.abspai.SD", "mean.Cohens.d.SD")
+results_adv_df_poster <- process_results_advanced(results_files_advanced = results_files_advanced_all, 
+                                           mean_metrics = mean_metrics,
+                                           sd_metrics = sd_metrics,
+                                           add_SD_brackets = FALSE)
+```
+## Combine traditional and advanced results
+### Recode variable names of advanced results
+```{r}
+# Names of metrics in the traditional and advanced approach are originally different as the advanced approach calculates the mean across folds/repetitions
+# Therefore, metrics need to be renamed in order to merge both dataframes
+#results_adv_df$Metric <- as.factor(results_adv_df$Metric)
+
+results_adv_df_poster$Metric <- recode(results_adv_df_poster$Metric, "Mean_all_correlation" = "correlation", "Mean_all_RMSE" = "RMSE", 
+                    "Mean_all_MAE" = "MAE", "mean.Cohens.d" = "cohens.d")
+```
+### Add sd_metrics to traditional results 
+```{r}
+colnames(results_trad_df)
+# Initialize a list to store new rows
+new_rows <- list()
+
+# Vector of sd_metrics
+sd_metrics <- c("Std_all_correlation", "Std_all_RMSE", "Std_all_MAE", "mean.abspai.SD", "mean.Cohens.d.SD")
+
+# Loop through the metrics
+for (sd_metric in sd_metrics) {
+  # Create a new row with appropriate structure (assuming 3 columns)
+  new_row <- c(0, sd_metric, 0)
+  # Store the new row in the list
+  new_rows[[length(new_rows) + 1]] <- new_row
+}
+
+# Combine all the new rows into a matrix or data frame
+new_rows_df <- do.call(rbind, new_rows)
+
+new_rows_df <- as.data.frame(new_rows_df, stringsAsFactors = FALSE)
+colnames(new_rows_df) <- colnames(results_trad_df)
+
+# Bind the new rows to the existing dataframe
+results_trad_df_poster <- rbind(results_trad_df, new_rows_df)
+```
+### Combine traditional and advanced df
+```{r}
+df <- merge(results_trad_df_poster, results_adv_df_poster, by = "Metric")
+```
+## Reduce df
+```{r}
+metrics_interest <- c("cohens.d","mean.Cohens.d.SD")
+df_plot <- df[df$Metric %in% metrics_interest,]
+df_plot$Metric <- gsub("cohens.d","Metric_cohens.d",df_plot$Metric)
+df_plot$Metric <- gsub("mean.Cohens.d.SD","Metric_mean.Cohens.d.SD",df_plot$Metric)
+```
+
+## Turn into long-format
+```{r}
+approaches <- colnames(df_plot)[colnames(df_plot)!= "Metric"]
+
+df_plot_long_1 <- reshape(data=df_plot[df_plot$Metric == "Metric_cohens.d",], varying = approaches,
+          v.name=c("Cohens_d"),
+          times= approaches,
+          timevar = "approach",
+          direction="long")
+
+df_plot_long_1$Metric <- NULL
+df_plot_long_1$id <- NULL
+
+df_plot_long_2 <- reshape(data=df_plot[df_plot$Metric == "Metric_mean.Cohens.d.SD",], varying = approaches,
+          v.name=c("SD"),
+          times= approaches,
+          timevar = "approach",
+          direction="long")
+
+df_plot_long_2$Metric <- NULL
+df_plot_long_2$id <- NULL
+
+df_plot_long <- merge(df_plot_long_1, df_plot_long_2, by = "approach")
+```
+## Prepare data for plot
+```{r}
+df_plot_long$Cohens_d <- as.numeric(df_plot_long$Cohens_d)
+df_plot_long$SD<- as.numeric(df_plot_long$SD)
+
+# Order approaches and add blank spaces for nicer plotting
+approaches_ordered <- c("panic.trad\n(linear)", "panic.adv\n(ridge)", "panic.adv\n(ridgewhp)","panic.adv\n(rf)",  "gap1",              "protect.trad\n(linear)", "protect.adv\n(ridge)", "protect.adv\n(ridgewhp)","protect.adv\n(rf)", "gap2",  "aprotectsympscore.adv\n(ridge)", "aprotectfuncscore.adv\n(ridge)")
+
+approaches_ordered_red <- c("panic.trad\n(linear)", "panic.adv\n(ridge)", "panic.adv\n(ridgewhp)","panic.adv\n(rf)",  "gap1",              "protect.trad\n(linear)", "protect.adv\n(ridge)", "protect.adv\n(ridgewhp)","protect.adv\n(rf)")
+
+approaches_labels <- c("trad. (linear)", " adv. (ridge)", " adv. (ridge w. hp)"," adv. (rf)",  "",              "trad. (linear)", " adv. (ridge)", " adv. (ridge w. hp)"," adv. (rf)", "",  "adv.\n(symptom score, ridge)", "adv.\n(functioning score, ridge)")
+
+approaches_labels_red <- c("trad. (linear)", " adv. (ridge)", " adv. (ridge w. hp)"," adv. (rf)",  "",              "trad. (linear)", " adv. (ridge)", " adv. (ridge w. hp)"," adv. (rf)")
+
+# approaches_labels_red <- c("traditional (linear)", " advanced (ridge)", " advanced (ridge w. hp)"," advanced (random forest)",  "",              "traditional (linear)", " advanced (ridge)", " advanced (ridge w. hp)"," advanced (random forest)")
+
+
+df_plot_long$approach <- factor(df_plot_long$approach,levels = approaches_ordered)
+
+# Add type of approach for colours
+df_plot_long$class <- ifelse(grepl("trad", df_plot_long$approach), "traditional", 
+                        ifelse(grepl("adv", df_plot_long$approach), "advanced", NA))
+df_plot_long$class <- factor(df_plot_long$class, levels = c("traditional","advanced"))
+
+# Remove last classes
+df_plot_long <- df_plot_long[!df_plot_long$approach %in% c("aprotectsympscore.adv\n(ridge)", "aprotectfuncscore.adv\n(ridge)"), ]
+df_plot_long$approach <- factor(df_plot_long$approach, approaches_ordered_red)
+```
+
+## Setting for ggplot
+```{r}
+size_text = 24
+theme_set(theme_bw() + 
+            theme(panel.grid = element_blank(),
+                  panel.grid.major.y = element_line(size = 0.2, color = "gray")    # Add only horizontal lines
+)+ theme(text = element_text(size =size_text),
+                             axis.title = element_text(size =size_text+4), 
+                              plot.title = element_text(size = size_text),
+                             axis.text = element_text(size = size_text),
+                             strip.text = element_text(size = size_text),
+                             legend.text =  element_text(size =size_text-1)))
+
+# Set colors
+# Get 5 colors from the orange spectrum
+colrs_red_green = c("red3","chartreuse3")
+```
+
+## Plot 
+```{r, fig.height = 8}
+plot <- ggplot(data=df_plot_long, aes(x=approach, y=Cohens_d, fill = class)) +
+  geom_bar(stat="identity") +
+  geom_errorbar(aes(ymin=Cohens_d-SD, ymax=Cohens_d+SD), width=.2,
+                 position=position_dodge(.9))+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  scale_fill_manual(values = colrs_red_green)+
+  scale_x_discrete(labels = approaches_labels_red, drop = FALSE) +
+  theme(legend.position="none") +
+  xlab("")+
+  ylab("Cohen´s d")
+
+plot
+```
+
+## Save plot 
+```{r}
+ggsave("ML_Cohens_d.svg",plot, width = 13, height = 7)
 ```
