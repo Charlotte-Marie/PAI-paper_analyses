@@ -272,7 +272,7 @@ ft <- hline(ft, part = "body", i = c(3, 7, 14, 26),
                       border = fp_border(color = "black", width = 1))
 ft <- fontsize(ft, size = 7, part = "all")
 
-#flextable::save_as_docx(ft, path = "plots\\PROBAST_table.docx", pr_section = format_table_wide)
+flextable::save_as_docx(ft, path = file.path(path_save_plots,"PROBAST_table.docx"), pr_section = format_table_wide)
 ```
 
 ## Plot S1
@@ -317,7 +317,7 @@ plot_PROBAST <- ggplot(data = data_PROBAST_plot_long,aes(x = `Rating_domain`, fi
 
 # Save plot
 plot_PROBAST
-ggsave("figure_S1_PROBAST.svg",plot_PROBAST, height = 4.5, width = 9)
+ggsave(file.path(path_save_plots,"figure_S1_PROBAST.svg"),plot_PROBAST, height = 4.5, width = 9)
 ```
 
 ## Figure 2b: Plot ROB vs. Cohen´s d
