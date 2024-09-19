@@ -17,7 +17,7 @@ library(tibble)
 ## Set paths for advanced approaches
 ```{r}
 # Set paths for folders of advanced approaches
-path_base = "Y:\\PsyThera\\Projekte_Meinke\\PAI_Personalized_Advantage_Index\\Results_PAI_Test"
+path_base = "Z:\\PsyThera\\Projekte_Meinke\\PAI_Personalized_Advantage_Index\\Results_PAI_Test"
 paths_advanced <- list(
   "panic.adv\n(ridge)" = file.path(path_base, "PANIK_net_ridge_regression"),
   "panic.adv\n(ridgewhp)" = file.path(path_base,"PANIK_net_ridge_regression_hp_tuned_grid"),
@@ -118,7 +118,7 @@ process_results_advanced <- function(results_files_advanced, mean_metrics, sd_me
     select(Metric, everything())
   
   # Filter the results based on mean_metrics and sd_metrics
-  results_adv_df <- result[result$Metric %in% c(mean_metrics, sd_metrics), ]
+  results_adv_df <- result[result$Metric %in% c(mean_metrics, sd_metrics,"n_t_test_sig"), ]
   
   # Transpose dataframe
   results_t <- as.data.frame(t(results_adv_df))
@@ -264,9 +264,14 @@ results_trad_all <- rbind(results_trad_df,results_trad_df_50perc)
 #results_adv_df$Metric <- as.factor(results_adv_df$Metric)
 
 results_adv_df$Metric <- recode(results_adv_df$Metric, "Mean_all_correlation" = "correlation", "Mean_all_RMSE" = "RMSE", 
-                    "Mean_all_MAE" = "MAE", "mean.Cohens.d" = "cohens.d")
-results_adv_df_50perc$Metric <- recode(results_adv_df_50perc$Metric, "mean.Cohens.d.50perc" = "cohens.d.50perc")
+                    "Mean_all_MAE" = "MAE", "mean.Cohens.d" = "cohens.d", "mean.abspai" = "mean_abspai", "n_t_test_sig" = "t-test")
+results_adv_df_50perc$Metric <- recode(results_adv_df_50perc$Metric, "mean.Cohens.d.50perc" = "cohens.d.50perc", 
+                                       "mean.abspai.50perc" = "mean_abspai.50perc",
+                                       "n_t_test_sig.50perc" = "t-test.50perc")
 results_adv_all <- rbind(results_adv_df, results_adv_df_50perc)
+
+
+results_trad_all$Metric <- recode(results_trad_all$Metric, "t.test_p_value" = "t-test", "t.test_p_value.50perc" = "t-test.50perc")
 ```
 
 ## Join dataframes
@@ -301,13 +306,13 @@ cols_nice_order_renamed <- str_replace_all(cols_nice_order, setNames(new_substri
 colnames(df_renamed) <- cols_nice_order_renamed
 
 # Get names of columns
-names_panic_new <- cols_nice_order_renamed[grep("^PANIK", cols_nice_order_renamed)]
+names_panic_new <- cols_nice_order_renamed[grep("^PANIC", cols_nice_order_renamed)]
 names_protect_new <- cols_nice_order_renamed[grep("^Protect.", cols_nice_order_renamed)]
 names_protect_alternatives_new <- cols_nice_order_renamed[grep("function|symptom",cols_nice_order_renamed)]
 
 # Rename and order metrics
-df_renamed$Metric <- factor(df_renamed$Metric, levels = c("cohens.d", "cohens.d.50perc","mean.abspai", "mean.abspai.50perc","MAE","RMSE","correlation"))
-levels(df_renamed$Metric) <- c("Cohen´s d","Cohen´s d 50%", "Mean PAI","Mean PAI 50%","MAE","RMSE","Correlation")
+df_renamed$Metric <- factor(df_renamed$Metric, levels = c("t-test", "t-test.50perc","cohens.d", "cohens.d.50perc","mean_abspai", "mean_abspai.50perc","MAE","RMSE","correlation"))
+levels(df_renamed$Metric) <- c("t-test", "t-test 50%","Cohen´s d","Cohen´s d 50%", "Mean PAI","Mean PAI 50%","MAE","RMSE","Correlation")
 df_renamed <- df_renamed[order(df_renamed$Metric), ]
 ```
 
